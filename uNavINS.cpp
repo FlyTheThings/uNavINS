@@ -64,21 +64,21 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     // ... gravity
     grav(2,0) = G;
     // ... H
-    H.block(5,5,0,0) = Eigen::Matrix<float,5,5>::Identity();
+    H.block(0,0,5,5) = Eigen::Matrix<float,5,5>::Identity();
     // // ... Rw
-    // Rw.block(3,3,0,0) = powf(SIG_W_A,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(0,0,3,3) = powf(SIG_W_A,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // Rw.block(3,3,3,3) = powf(SIG_W_G,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // Rw.block(3,3,6,6) = 2.0f*powf(SIG_A_D,2.0f)/TAU_A*Eigen::Matrix<float,3,3>::Identity();
-    // Rw.block(3,3,9,9) = 2.0f*powf(SIG_G_D,2.0f)/TAU_G*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(6,6,3,3) = 2.0f*powf(SIG_A_D,2.0f)/TAU_A*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(9,9,3,3) = 2.0f*powf(SIG_G_D,2.0f)/TAU_G*Eigen::Matrix<float,3,3>::Identity();
     // // ... P
-    // P.block(3,3,0,0) = powf(P_P_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(0,0,3,3) = powf(P_P_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // P.block(3,3,3,3) = powf(P_V_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // P.block(2,2,6,6) = powf(P_A_INIT,2.0f)*Eigen::Matrix<float,2,2>::Identity();
+    // P.block(6,6,2,2) = powf(P_A_INIT,2.0f)*Eigen::Matrix<float,2,2>::Identity();
     // P(8,8) = powf(P_HDG_INIT,2.0f);
-    // P.block(3,3,9,9) = powf(P_AB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // P.block(3,3,12,12) = powf(P_GB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(9,9,3,3) = powf(P_AB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(12,12,3,3) = powf(P_GB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // // ... R
-    // R.block(2,2,0,0) = powf(SIG_GPS_P_NE,2.0f)*Eigen::Matrix<float,2,2>::Identity();
+    // R.block(0,0,2,2) = powf(SIG_GPS_P_NE,2.0f)*Eigen::Matrix<float,2,2>::Identity();
     // R(2,2) = powf(SIG_GPS_P_D,2.0f);
     // R.block(3,3,3,3) = powf(SIG_GPS_V,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // ... Rw
@@ -150,27 +150,27 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     // Jacobian
     Fs.setZero();
     // ... pos2gs
-    Fs.block(3,3,0,3) = Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(0,3,3,3) = Eigen::Matrix<float,3,3>::Identity();
     // ... gs2pos
     Fs(5,2) = -2.0f*G/EARTH_RADIUS;
     // ... gs2att
-    Fs.block(3,3,3,6) = -2.0f*C_B2N*sk(f_b);
+    Fs.block(3,6,3,3) = -2.0f*C_B2N*sk(f_b);
     // ... gs2acc
-    Fs.block(3,3,3,9) = -C_B2N;
+    Fs.block(3,9,3,3) = -C_B2N;
     // ... att2att
-    Fs.block(3,3,6,6) = -sk(om_ib);
+    Fs.block(6,6,3,3) = -sk(om_ib);
     // ... att2gyr
-    Fs.block(3,3,6,12) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(6,12,3,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
     // ... Accel Markov Bias
-    Fs.block(3,3,9,9) = -1.0f/TAU_A*Eigen::Matrix<float,3,3>::Identity();
-    Fs.block(3,3,12,12) = -1.0f/TAU_G*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(9,9,3,3) = -1.0f/TAU_A*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(12,12,3,3) = -1.0f/TAU_G*Eigen::Matrix<float,3,3>::Identity();
     // State Transition Matrix
     PHI = Eigen::Matrix<float,15,15>::Identity()+Fs*dt;
     // Process Noise
     Gs.setZero();
-    Gs.block(3,3,3,0) = -C_B2N;
-    Gs.block(3,3,6,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
-    Gs.block(6,6,9,6) = Eigen::Matrix<float,6,6>::Identity();
+    Gs.block(3,0,3,3) = -C_B2N;
+    Gs.block(6,3,3,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
+    Gs.block(9,6,6,6) = Eigen::Matrix<float,6,6>::Identity();
     // Discrete Process Noise
     Q = PHI*dt*Gs*Rw*Gs.transpose();
     Q = 0.5f*(Q+Q.transpose());
