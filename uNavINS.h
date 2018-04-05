@@ -1,15 +1,15 @@
 /*
 uNavINS.h
 
-Original Author: 
+Original Author:
 Adhika Lie
 2012-10-08
-University of Minnesota 
-Aerospace Engineering and Mechanics 
+University of Minnesota
+Aerospace Engineering and Mechanics
 Copyright 2011 Regents of the University of Minnesota. All rights reserved.
 
 Updated to be a class, use Eigen, and compile as an Arduino library.
-Added methods to get gyro and accel bias. Added initialization to 
+Added methods to get gyro and accel bias. Added initialization to
 estimated angles rather than assuming IMU is level. Added method to get psi,
 rather than just heading, and ground track.
 Brian R Taylor
@@ -18,19 +18,19 @@ brian.taylor@bolderflight.com
 Bolder Flight Systems
 Copyright 2017 Bolder Flight Systems
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or 
+The above copyright notice and this permission notice shall be included in all copies or
 substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
@@ -43,10 +43,46 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 #ifndef UNAVINS_H
 #define UNAVINS_H
+#if defined(ARDUINO)
+  #include "Arduino.h"
+  #include "Eigen.h"
+  #include <Eigen/Dense>
+#else
+  #include <sys/time.h>
+  #include <stdint.h>
+  #include <math.h>
+  #include <Eigen/Core>
+  #include <Eigen/Dense>
 
-#include "Arduino.h"
-#include "Eigen.h"
-#include <Eigen/Dense>
+  uint64_t micros() {
+      struct timeval tv;
+      gettimeofday(&tv,NULL);
+      return tv.tv_sec*(uint64_t)1000000+tv.tv_usec;
+  }
+
+  class elapsedMicros
+  {
+  private:
+  	unsigned long us;
+  public:
+  	elapsedMicros(void) { us = micros(); }
+  	elapsedMicros(unsigned long val) { us = micros() - val; }
+  	elapsedMicros(const elapsedMicros &orig) { us = orig.us; }
+  	operator unsigned long () const { return micros() - us; }
+  	elapsedMicros & operator = (const elapsedMicros &rhs) { us = rhs.us; return *this; }
+  	elapsedMicros & operator = (unsigned long val) { us = micros() - val; return *this; }
+  	elapsedMicros & operator -= (unsigned long val)      { us += val ; return *this; }
+  	elapsedMicros & operator += (unsigned long val)      { us -= val ; return *this; }
+  	elapsedMicros operator - (int val) const           { elapsedMicros r(*this); r.us += val; return r; }
+  	elapsedMicros operator - (unsigned int val) const  { elapsedMicros r(*this); r.us += val; return r; }
+  	elapsedMicros operator - (long val) const          { elapsedMicros r(*this); r.us += val; return r; }
+  	elapsedMicros operator - (unsigned long val) const { elapsedMicros r(*this); r.us += val; return r; }
+  	elapsedMicros operator + (int val) const           { elapsedMicros r(*this); r.us -= val; return r; }
+  	elapsedMicros operator + (unsigned int val) const  { elapsedMicros r(*this); r.us -= val; return r; }
+  	elapsedMicros operator + (long val) const          { elapsedMicros r(*this); r.us -= val; return r; }
+  	elapsedMicros operator + (unsigned long val) const { elapsedMicros r(*this); r.us -= val; return r; }
+  };
+#endif
 
 class uNavINS {
   public:
@@ -101,11 +137,12 @@ class uNavINS {
     // major eccentricity squared
     const double ECC2 = 0.0066943799901;
     // earth semi-major axis radius (m)
-    const double EARTH_RADIUS = 6378137.0;        
+    const double EARTH_RADIUS = 6378137.0;
     // initialized
     bool initialized = false;
     // timing
-    float tnow, tprev, dt;
+    elapsedMicros _t;
+    float _dt;
     unsigned long previousTOW;
     // estimated attitude
     float phi, theta, psi, heading;
@@ -124,7 +161,7 @@ class uNavINS {
     // earth radius at location
     double Re, Rn, denom;
     // State matrix
-    Eigen::Matrix<float,15,15> Fs = Eigen::Matrix<float,15,15>::Zero();
+    Eigen::Matrix<float,15,15> Fs = Eigen::Matrix<float,15,15>::Identity();
     // State transition matrix
     Eigen::Matrix<float,15,15> PHI = Eigen::Matrix<float,15,15>::Zero();
     // Covariance matrix
