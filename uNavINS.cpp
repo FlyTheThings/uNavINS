@@ -1,15 +1,15 @@
 /*
 uNavINS.cpp
 
-Original Author: 
+Original Author:
 Adhika Lie
 2012-10-08
-University of Minnesota 
-Aerospace Engineering and Mechanics 
+University of Minnesota
+Aerospace Engineering and Mechanics
 Copyright 2011 Regents of the University of Minnesota. All rights reserved.
 
 Updated to be a class, use Eigen, and compile as an Arduino library.
-Added methods to get gyro and accel bias. Added initialization to 
+Added methods to get gyro and accel bias. Added initialization to
 estimated angles rather than assuming IMU is level. Added method to get psi,
 rather than just heading, and ground track.
 Brian R Taylor
@@ -18,29 +18,26 @@ brian.taylor@bolderflight.com
 Bolder Flight Systems
 Copyright 2017 Bolder Flight Systems
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
-and associated documentation files (the "Software"), to deal in the Software without restriction, 
-including without limitation the rights to use, copy, modify, merge, publish, distribute, 
-sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or 
+The above copyright notice and this permission notice shall be included in all copies or
 substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING 
-BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include "Arduino.h"
 #include "uNavINS.h"
 
 void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,double lon,double alt,float p,float q,float r,float ax,float ay,float az,float hx,float hy, float hz) {
   if (!initialized) {
-    // set the time
-    tprev = (float) micros()/1000000.0f;
     // initial attitude and heading
     theta = asinf(ax/G);
     phi = asinf(-ay/(G*cosf(theta)));
@@ -49,36 +46,36 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     Byc = hy*cosf(phi) - hz*sinf(phi);
     // finding initial heading
     if (-Byc > 0) {
-      psi = PI/2.0f - atanf(Bxc/-Byc);
+      psi = M_PI/2.0f - atanf(Bxc/-Byc);
     } else {
-      psi= 3.0f*PI/2.0f - atanf(Bxc/-Byc);
+      psi= 3.0f*M_PI/2.0f - atanf(Bxc/-Byc);
     }
     psi = constrainAngle180(psi);
     psi_initial = psi;
     // euler to quaternion
-    quat(0) = cosf(psi/2.0f)*cosf(theta/2.0f)*cosf(phi/2.0f) + sinf(psi/2.0f)*sinf(theta/2.0f)*sinf(phi/2.0f);  
+    quat(0) = cosf(psi/2.0f)*cosf(theta/2.0f)*cosf(phi/2.0f) + sinf(psi/2.0f)*sinf(theta/2.0f)*sinf(phi/2.0f);
     quat(1) = cosf(psi/2.0f)*cosf(theta/2.0f)*sinf(phi/2.0f) - sinf(psi/2.0f)*sinf(theta/2.0f)*cosf(phi/2.0f);
-    quat(2) = cosf(psi/2.0f)*sinf(theta/2.0f)*cosf(phi/2.0f) + sinf(psi/2.0f)*cosf(theta/2.0f)*sinf(phi/2.0f);  
+    quat(2) = cosf(psi/2.0f)*sinf(theta/2.0f)*cosf(phi/2.0f) + sinf(psi/2.0f)*cosf(theta/2.0f)*sinf(phi/2.0f);
     quat(3) = sinf(psi/2.0f)*cosf(theta/2.0f)*cosf(phi/2.0f) - cosf(psi/2.0f)*sinf(theta/2.0f)*sinf(phi/2.0f);
     // Assemble the matrices
     // ... gravity
     grav(2,0) = G;
     // ... H
-    H.block(5,5,0,0) = Eigen::Matrix<float,5,5>::Identity();
+    H.block(0,0,5,5) = Eigen::Matrix<float,5,5>::Identity();
     // // ... Rw
-    // Rw.block(3,3,0,0) = powf(SIG_W_A,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(0,0,3,3) = powf(SIG_W_A,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // Rw.block(3,3,3,3) = powf(SIG_W_G,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // Rw.block(3,3,6,6) = 2.0f*powf(SIG_A_D,2.0f)/TAU_A*Eigen::Matrix<float,3,3>::Identity();
-    // Rw.block(3,3,9,9) = 2.0f*powf(SIG_G_D,2.0f)/TAU_G*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(6,6,3,3) = 2.0f*powf(SIG_A_D,2.0f)/TAU_A*Eigen::Matrix<float,3,3>::Identity();
+    // Rw.block(9,9,3,3) = 2.0f*powf(SIG_G_D,2.0f)/TAU_G*Eigen::Matrix<float,3,3>::Identity();
     // // ... P
-    // P.block(3,3,0,0) = powf(P_P_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(0,0,3,3) = powf(P_P_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // P.block(3,3,3,3) = powf(P_V_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // P.block(2,2,6,6) = powf(P_A_INIT,2.0f)*Eigen::Matrix<float,2,2>::Identity();
+    // P.block(6,6,2,2) = powf(P_A_INIT,2.0f)*Eigen::Matrix<float,2,2>::Identity();
     // P(8,8) = powf(P_HDG_INIT,2.0f);
-    // P.block(3,3,9,9) = powf(P_AB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
-    // P.block(3,3,12,12) = powf(P_GB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(9,9,3,3) = powf(P_AB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
+    // P.block(12,12,3,3) = powf(P_GB_INIT,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // // ... R
-    // R.block(2,2,0,0) = powf(SIG_GPS_P_NE,2.0f)*Eigen::Matrix<float,2,2>::Identity();
+    // R.block(0,0,2,2) = powf(SIG_GPS_P_NE,2.0f)*Eigen::Matrix<float,2,2>::Identity();
     // R(2,2) = powf(SIG_GPS_P_D,2.0f);
     // R.block(3,3,3,3) = powf(SIG_GPS_V,2.0f)*Eigen::Matrix<float,3,3>::Identity();
     // ... Rw
@@ -106,13 +103,14 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     f_b(0,0) = ax;
     f_b(1,0) = ay;
     f_b(2,0) = az;
+    /* initialize the time */
+    _t = 0;
     // initialized flag
     initialized = true;
   } else {
     // get the change in time
-    tnow = (float) micros()/1000000.0f;
-    dt = tnow - tprev;
-    tprev = tnow;   
+    _dt = (float)_t;
+    _t = 0;
     lla_ins(0,0) = lat_ins;
     lla_ins(1,0) = lon_ins;
     lla_ins(2,0) = alt_ins;
@@ -124,9 +122,9 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     C_B2N = C_N2B.transpose();
     // Attitude Update
     dq(0) = 1.0f;
-    dq(1) = 0.5f*om_ib(0,0)*dt;
-    dq(2) = 0.5f*om_ib(1,0)*dt;
-    dq(3) = 0.5f*om_ib(2,0)*dt;
+    dq(1) = 0.5f*om_ib(0,0)*_dt;
+    dq(2) = 0.5f*om_ib(1,0)*_dt;
+    dq(3) = 0.5f*om_ib(2,0)*_dt;
     quat = qmult(quat,dq);
     quat.normalize();
     // Avoid quaternion flips sign
@@ -139,40 +137,40 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
     psi = atan2f(2.0f*(quat(1,0)*quat(2,0)+quat(0,0)*quat(3,0)),1.0f-2.0f*(quat(2,0)*quat(2,0)+quat(3,0)*quat(3,0)));
     // Velocity Update
     dx = C_B2N*f_b + grav;
-    vn_ins += dt*dx(0,0);
-    ve_ins += dt*dx(1,0);
-    vd_ins += dt*dx(2,0);
+    vn_ins += _dt*dx(0,0);
+    ve_ins += _dt*dx(1,0);
+    vd_ins += _dt*dx(2,0);
     // Position Update
     dxd = llarate(V_ins,lla_ins);
-    lat_ins += dt*dxd(0,0);
-    lon_ins += dt*dxd(1,0);
-    alt_ins += dt*dxd(2,0);
+    lat_ins += _dt*dxd(0,0);
+    lon_ins += _dt*dxd(1,0);
+    alt_ins += _dt*dxd(2,0);
     // Jacobian
     Fs.setZero();
     // ... pos2gs
-    Fs.block(3,3,0,3) = Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(0,3,3,3) = Eigen::Matrix<float,3,3>::Identity();
     // ... gs2pos
     Fs(5,2) = -2.0f*G/EARTH_RADIUS;
     // ... gs2att
-    Fs.block(3,3,3,6) = -2.0f*C_B2N*sk(f_b);
+    Fs.block(3,6,3,3) = -2.0f*C_B2N*sk(f_b);
     // ... gs2acc
-    Fs.block(3,3,3,9) = -C_B2N;
+    Fs.block(3,9,3,3) = -C_B2N;
     // ... att2att
-    Fs.block(3,3,6,6) = -sk(om_ib);
+    Fs.block(6,6,3,3) = -sk(om_ib);
     // ... att2gyr
-    Fs.block(3,3,6,12) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(6,12,3,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
     // ... Accel Markov Bias
-    Fs.block(3,3,9,9) = -1.0f/TAU_A*Eigen::Matrix<float,3,3>::Identity();
-    Fs.block(3,3,12,12) = -1.0f/TAU_G*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(9,9,3,3) = -1.0f/TAU_A*Eigen::Matrix<float,3,3>::Identity();
+    Fs.block(12,12,3,3) = -1.0f/TAU_G*Eigen::Matrix<float,3,3>::Identity();
     // State Transition Matrix
-    PHI = Eigen::Matrix<float,15,15>::Identity()+Fs*dt;
+    PHI = Eigen::Matrix<float,15,15>::Identity()+Fs*_dt;
     // Process Noise
     Gs.setZero();
-    Gs.block(3,3,3,0) = -C_B2N;
-    Gs.block(3,3,6,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
-    Gs.block(6,6,9,6) = Eigen::Matrix<float,6,6>::Identity();
+    Gs.block(3,0,3,3) = -C_B2N;
+    Gs.block(6,3,3,3) = -0.5f*Eigen::Matrix<float,3,3>::Identity();
+    Gs.block(9,6,6,6) = Eigen::Matrix<float,6,6>::Identity();
     // Discrete Process Noise
-    Q = PHI*dt*Gs*Rw*Gs.transpose();
+    Q = PHI*_dt*Gs*Rw*Gs.transpose();
     Q = 0.5f*(Q+Q.transpose());
     // Covariance Time Update
     P = PHI*P*PHI.transpose()+Q;
@@ -186,13 +184,13 @@ void uNavINS::update(unsigned long TOW,double vn,double ve,double vd,double lat,
       lla_gps(2,0) = alt;
       V_gps(0,0) = vn;
       V_gps(1,0) = ve;
-      V_gps(2,0) = vd;     
+      V_gps(2,0) = vd;
       lla_ins(0,0) = lat_ins;
       lla_ins(1,0) = lon_ins;
       lla_ins(2,0) = alt_ins;
       V_ins(0,0) = vn_ins;
       V_ins(1,0) = ve_ins;
-      V_ins(2,0) = vd_ins; 
+      V_ins(2,0) = vd_ins;
       // Position, converted to NED
       pos_ecef_ins = lla2ecef(lla_ins);
       pos_ned_ins = ecef2ned(pos_ecef_ins,lla_ins);
@@ -349,17 +347,17 @@ Eigen::Matrix<float,3,3> uNavINS::sk(Eigen::Matrix<float,3,1> w) {
 Eigen::Matrix<double,3,1> uNavINS::llarate(Eigen::Matrix<double,3,1> V,Eigen::Matrix<double,3,1> lla) {
   double Rew, Rns, denom;
   Eigen::Matrix<double,3,1> lla_dot;
-  
+
   denom = (1.0 - (ECC2 * pow(sin(lla(0,0)),2.0)));
   denom = sqrt(denom*denom);
 
   Rew = EARTH_RADIUS / sqrt(denom);
   Rns = EARTH_RADIUS*(1.0-ECC2) / denom*sqrt(denom);
-  
+
   lla_dot(0,0) = V(0,0)/(Rns + lla(2,0));
   lla_dot(1,0) = V(1,0)/((Rew + lla(2,0))*cos(lla(0,0)));
   lla_dot(2,0) = -V(2,0);
-  
+
   return lla_dot;
 }
 
@@ -395,13 +393,13 @@ Eigen::Matrix<float,3,3> uNavINS::quat2dcm(Eigen::Matrix<float,4,1> q) {
   C_N2B(0,0) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(1,0),2.0f);
   C_N2B(1,1) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(2,0),2.0f);
   C_N2B(2,2) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(3,0),2.0f);
-  
+
   C_N2B(0,1) = 2.0f*q(1,0)*q(2,0) + 2.0f*q(0,0)*q(3,0);
   C_N2B(0,2) = 2.0f*q(1,0)*q(3,0) - 2.0f*q(0,0)*q(2,0);
-  
+
   C_N2B(1,0) = 2.0f*q(1,0)*q(2,0) - 2.0f*q(0,0)*q(3,0);
   C_N2B(1,2) = 2.0f*q(2,0)*q(3,0) + 2.0f*q(0,0)*q(1,0);
-  
+
   C_N2B(2,0) = 2.0f*q(1,0)*q(3,0) + 2.0f*q(0,0)*q(2,0);
   C_N2B(2,1) = 2.0f*q(2,0)*q(3,0) - 2.0f*q(0,0)*q(1,0);
   return C_N2B;
@@ -419,15 +417,15 @@ Eigen::Matrix<float,4,1> uNavINS::qmult(Eigen::Matrix<float,4,1> p, Eigen::Matri
 
 // bound yaw angle between -180 and 180
 float uNavINS::constrainAngle180(float dta) {
-  if(dta >  PI) dta -= (PI*2.0f);
-  if(dta < -PI) dta += (PI*2.0f);
+  if(dta >  M_PI) dta -= (M_PI*2.0f);
+  if(dta < -M_PI) dta += (M_PI*2.0f);
   return dta;
 }
 
-// bound heading angle between 0 and 360 
+// bound heading angle between 0 and 360
 float uNavINS::constrainAngle360(float dta){
-  dta = fmod(dta,2.0f*PI);
+  dta = fmod(dta,2.0f*M_PI);
   if (dta < 0)
-    dta += 2.0f*PI;
+    dta += 2.0f*M_PI;
   return dta;
 }
